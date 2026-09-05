@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.img
+backups/
+work/
+captures/
+.DS_Store
