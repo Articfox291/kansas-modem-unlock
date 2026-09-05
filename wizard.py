@@ -397,12 +397,21 @@ def detect(ux, profs, cfg):
     bb = ux.getprop("gsm.version.baseband") if not ux.dry else ""
     sku = ux.getprop("ro.boot.hardware.sku") if not ux.dry else "XT2513V"
     for pid, p in profs.items():
+        bb_ok = (not p.get("baseband_substr") or p["baseband_substr"] in bb
+                 or ux.dry)
+        bb_variant = ""
+        if not bb_ok:
+            for alt in p.get("baseband_alt", []):
+                if alt and alt in bb:
+                    bb_ok, bb_variant = True, alt
+                    break
         if (p.get("models") and model and
                 any(m in model for m in p["models"]) and
-                (not p.get("skus") or sku in p["skus"]) and
-                (not p.get("baseband_substr") or p["baseband_substr"] in bb
-                 or ux.dry)):
+                (not p.get("skus") or sku in p["skus"]) and bb_ok):
             ux.log(f"detected profile: {pid} ({p.get('label')})")
+            if bb_variant:
+                ux.log("baseband shows our own lab marker variant "
+                       f"({bb_variant[:32]}...) — same build, recognized")
             return p
     ux.log(f"no profile matches model={model} sku={sku} "
            f"baseband={bb[:40]}")

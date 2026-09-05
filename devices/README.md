@@ -8,7 +8,9 @@ people's modems get bricked.
 ## Schema (`devices/<id>.json`, `"schema": 1`)
 
 - `id`, `label`, `status` (`verified-live` | `untested-draft` — drafts refuse
-  to flash), `models[]`, `skus[]`, `baseband_substr`, `securestate`,
+  to flash), `models[]`, `skus[]`, `baseband_substr` + optional
+  `baseband_alt[]` (lab-marker variants of the SAME build only — never use
+  this for genuine build deltas like OTA revisions; those stay refused), `securestate`,
   `stock_md1img {size, sha256}` — all become preflight gates.
 - `never_flash[]` — hard deny list, no override path. Must at minimum cover
   preloader/gpt/efuse/nvram-family and the non-target modem slot.

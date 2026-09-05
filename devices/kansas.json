@@ -6,6 +6,7 @@
   "models": ["kansas"],
   "skus": ["XT2513V"],
   "baseband_substr": "MT6835_NR17.RC.MP.V40.2.P247.01.339R",
+  "baseband_alt": ["MT6835_NR17.RC.MP.V40.2.P248.TESTING"],
   "securestate": "flashing_unlocked",
   "stock_md1img": {"size": 75697504,
     "sha256": "371671d30fa8c257985570223cc8abb32ff6f08cc93eba8b950a142585ab3272"},
