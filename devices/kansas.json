@@ -1,0 +1,69 @@
+{
+  "schema": 1,
+  "id": "kansas",
+  "label": "Moto G 5G (2025) XT2513V — MT6835, build P247.01.339R",
+  "status": "verified-live",
+  "models": ["kansas"],
+  "skus": ["XT2513V"],
+  "baseband_substr": "MT6835_NR17.RC.MP.V40.2.P247.01.339R",
+  "securestate": "flashing_unlocked",
+  "stock_md1img": {"size": 75697504,
+    "sha256": "371671d30fa8c257985570223cc8abb32ff6f08cc93eba8b950a142585ab3272"},
+
+  "never_flash": ["preloader", "gpt", "pgpt", "lk", "efuse", "efuseBackup",
+    "seccfg", "nvram", "nvdata", "protect1", "protect2", "md1img_b"],
+
+  "flash_plan": [
+    {"partition": "system", "slot_suffix": true, "source_key": "system_gsi",
+     "magic": "sparse-or-ext4", "note": "Lineage/GSI system image. Delete product_a first ONLY on resize failure."},
+    {"partition": "vbmeta", "slot_suffix": true, "source_key": "vbmeta_a",
+     "magic": "avb", "note": "Disabled-verification vbmeta set (both slots)."},
+    {"partition": "init_boot", "slot_suffix": false, "source_key": "init_boot_stock",
+     "magic": "android-boot", "both_slots": true,
+     "note": "Stock init_boot first; KSU image comes in the root phase."}
+  ],
+
+  "root": {
+    "method": "kernelsu-next-init-boot",
+    "manager_package": "com.rifsxd.ksunext",
+    "manager_package_alt": [],
+    "stock_partition": "init_boot",
+    "su_probe": "su -c id",
+    "su_ok_marker": "uid=0",
+    "notes": [
+      "Patch init_boot ON DEVICE in the KernelSU manager (it recommends init_boot for this device), then flash the produced image.",
+      "Magisk in boot/init_boot bootloops on this device — do not substitute.",
+      "vbmeta must stay in the disabled state or init_boot flashes fail validation.",
+      "Live backup of init_boot is impossible before root; the user-supplied stock file (hash-pinned) IS the revert material."
+    ]
+  },
+
+  "modem_unlock": {
+    "slot": "md1img_a",
+    "patches": [
+      {"label": "force-legal", "offset": "0x5DF4FA", "old": "141e2412", "new": "01d2e0db",
+       "why": "SML legal-rule entry returns LEGAL (cat0/Network-link path)."},
+      {"label": "sl-check-force", "offset": "0x5EFF10", "old": "a3349110", "new": "01d2e0db",
+       "why": "SP-family per-category check entry returns pass."},
+      {"label": "gate-e6e2", "offset": "0x198E8E2", "old": "70ca5b0f", "new": "08900890",
+       "why": "smu_check_sml per-cat verdict branch neutralized (fall to allow arm)."},
+      {"label": "gate-e6ba", "offset": "0x198E8BA", "old": "90c89c08", "new": "08900890",
+       "why": "Early loop-entry gate neutralized."},
+      {"label": "gate-e6e8", "offset": "0x198E8E8", "old": "f0c87009", "new": "08900890",
+       "why": "Status-byte gate neutralized."},
+      {"label": "gate-e6f0", "offset": "0x198E8F0", "old": "90c87008", "new": "08900890",
+       "why": "Cat-choice gate neutralized."},
+      {"label": "gate-e6f4", "offset": "0x198E8F4", "old": "a0ca6c38", "new": "08900890",
+       "why": "Cat-accounting gate neutralized."},
+      {"label": "gate-e6f8", "offset": "0x198E8F8", "old": "608ae000", "new": "08900890",
+       "why": "Verdict-zero gate neutralized (allow return)."}
+    ]
+  },
+
+  "verify": {
+    "remain_must_stay": "5",
+    "ee_must_stay": "0",
+    "sim_state_unlocked": "LOADED",
+    "sim_state_locked": "NETWORK_LOCKED"
+  }
+}

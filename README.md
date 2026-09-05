@@ -1,5 +1,53 @@
 # kansas-modem-unlock
 
+Plug-in device framework (flash → root → carrier unlock) with interactive
+guidance. Ships with **one verified device** (below); other devices plug in
+as data files only after hardware-proven verification (see
+`devices/README.md`). Nothing here works on a device it wasn't proven on —
+refusal is a feature.
+
+## The 5-minute path
+
+```bash
+cp config.json mylab.json   # point firmware_files at YOUR images
+python wizard.py --dry-run --work work-wizard     # walk everything, touch nothing
+python wizard.py --work work-wizard               # detect -> flash -> root -> unlock
+python wizard.py --work work-wizard --phases verify  # health re-check anytime
+```
+
+State resumes from `work-wizard/state.json`; `--phases unlock` (or any
+subset) runs just that slice. Every destructive step needs typed
+confirmation; `--dry-run` performs the whole ceremony against logs only.
+
+## Architecture
+
+- `wizard.py` — interactive runner + device/session layer (Ux),
+  state/resume, profile detection and gating. No patch bytes inside.
+- `devices/<id>.json` — the entire device definition: fingerprint gates,
+  never-flash list, flash plan (user-supplied images + magic checks),
+  root recipe, modem patch table, verify acceptance values. Schema v1.
+- `flash_mod.py` — denylist (profile + global sacred list), magic checks,
+  sha pinning, per-partition typed confirms, post-flash health check.
+- `root_mod.py` — guided root with machine-verified gates around a human
+  middle (manager app + on-device patch); re-baselines once su passes.
+- `unlock.py` + `patches.py` — the proven modem flow, reused by the wizard
+  behind a drift guard (profile table must equal patches.py or refuse).
+- `sign_mtk_cert.py`, `parse_mtk_certs.py` — vendored re-sign helpers.
+- `config.json` — local paths + strictness (never committed with contents).
+
+## Supported devices
+
+| Profile | Status | Notes |
+|---|---|---|
+| `kansas` — Moto G 5G (2025) XT2513V, MT6835 P247.01.339R | verified-live | SIM NETWORK_LOCKED→LOADED proven, remain 5, EE 0, revert tested |
+
+Adding one: `devices/README.md` (schema + 6-item hardware-proof checklist).
+Untested drafts run audit/status only — flashing refuses.
+
+---
+
+## Standalone modem tool (same guarantees, no wizard)
+
 SIM-lock evaluation patch tool for **one exact device + modem build**:
 
 - Phone: Motorola Moto G 5G (2025) **XT2513V** (`kansas`, Tracfone/Visible)

@@ -1,0 +1,18 @@
+{
+  "_comment": "kansas-modem-unlock configuration. All paths optional; tool falls back to PATH lookups and prompts.",
+  "adb_path": "",
+  "fastboot_path": "",
+  "backup_root": "backups",
+  "work_root": "work",
+  "strict": true,
+  "require_typed_confirm": true,
+  "device_profile": "kansas",
+  "firmware_files": {
+    "_comment": "User-supplied image paths for the kansas flash plan. Nothing is bundled; hashes are recorded on first use and pinned after.",
+    "system_gsi": "",
+    "vbmeta_a": "",
+    "vbmeta_b": "",
+    "init_boot_stock": "",
+    "init_boot_ksu": "",
+    "md1img_stock": ""  }
+}
