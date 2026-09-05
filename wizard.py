@@ -40,8 +40,28 @@ class Ux:
         self.mode = "adb"  # or "fastboot"
         os.environ.setdefault("ADB_PATH", cfg.get("adb_path", ""))
         os.environ.setdefault("FASTBOOT_PATH", cfg.get("fastboot_path", ""))
-        self.adb = os.environ.get("ADB_PATH") or "adb"
-        self.fastboot = os.environ.get("FASTBOOT_PATH") or "fastboot"
+        if dry:
+            self.adb, self.fastboot = "adb", "fastboot"
+        else:
+            self.adb = self._resolve_tool("adb", os.environ.get("ADB_PATH"))
+            self.fastboot = self._resolve_tool(
+                "fastboot", os.environ.get("FASTBOOT_PATH"))
+
+    @staticmethod
+    def _resolve_tool(name, configured):
+        import shutil as _sh
+        if configured and Path(configured).is_file():
+            return configured
+        if configured:
+            raise Refuse(f"{name}: configured path not found: {configured}")
+        found = _sh.which(name)
+        if found:
+            return found
+        raise Refuse(
+            f"{name} not found. Install platform-tools and either add it "
+            f"to PATH or set {name.upper()}_PATH to the binary, e.g.:\n"
+            f"  set {name.upper()}_PATH=C:\\path\\to\\platform-tools"
+            f"\\{name}.exe")
         if dry:
             self.log("DRY RUN: no device writes will happen")
 
@@ -208,6 +228,13 @@ class Ux:
                     "take a clear photo with another camera",
                     "confirm the exact on-screen text back to the operator"])
 
+    def adb_devices(self):
+        if self.dry:
+            return ["dry-device"]
+        r = self._run([self.adb, "devices"], timeout=30)
+        return [l.split()[0] for l in r.stdout.splitlines()[1:]
+                if l.strip().split()[-1:] == ["device"]]
+
     def shell(self, *args, timeout=60):
         if self.dry:
             self.log(f"would run: adb shell {' '.join(args)}")
@@ -274,13 +301,13 @@ class Ux:
         self.abort("device did not finish booting in time; check screen/cable")
 
     def backup_partition(self, part, outdir="backups"):
+        if self.dry:
+            self.log(f"would pull backup of {part}")
+            return Path(outdir) / f"{part}_dry.img"
         out = Path(self.cfg.get("backup_root", outdir))
         out.mkdir(parents=True, exist_ok=True)
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         dst = out / f"{part}_backup_{ts}.img"
-        if self.dry:
-            self.log(f"would pull {part} -> {dst}")
-            return dst
         self.log(f"pulling {part} (minutes) -> {dst}")
         with open(dst, "wb") as f:
             r = subprocess.run(
@@ -328,9 +355,10 @@ def load_profiles():
 
 
 def detect(ux, profs, cfg):
-    one = ux.shell("devices")
-    if "device" not in one and not ux.dry:
-        ux.abort("no adb device")
+    devs = ux.adb_devices()
+    if not devs and not ux.dry:
+        ux.abort("no adb device (cable? RSA prompt accepted? try setup phase)")
+    one = " ".join(devs)
     model = ux.getprop("ro.product.model") if not ux.dry else "kansas"
     bb = ux.getprop("gsm.version.baseband") if not ux.dry else ""
     sku = ux.getprop("ro.boot.hardware.sku") if not ux.dry else "XT2513V"
