@@ -7,6 +7,10 @@
   "strict": true,
   "experimental": false,
   "require_typed_confirm": true,
+  "apks": {
+    "_comment": "Local APKs the tool may adb-install for you (your own copies).",
+    "ksu_manager": ""
+  },
   "device_profile": "kansas",
   "firmware_files": {
     "_comment": "User-supplied image paths for the kansas flash plan. Nothing is bundled; hashes are recorded on first use and pinned after.",

@@ -63,6 +63,151 @@ class Ux:
         return subprocess.run(cmd, capture_output=True, text=True,
                               timeout=timeout)
 
+    # ---- automation: environment, waiting, human handoffs ----
+    def ask_path(self, prompt, must_exist=True):
+        while True:
+            if self.dry:
+                self.log(f"would ask: {prompt}")
+                return ""
+            p = input(f"[input] {prompt} (empty aborts): ").strip()
+            p = p.strip("'\"")
+            if not p:
+                self.abort("aborted by user (nothing changed)")
+            if must_exist and not Path(p).is_file():
+                print(f"not a file: {p} -- try again")
+                continue
+            return p
+
+    def poll(self, fn, timeout, idle_msg, ok_msg="ready"):
+        if self.dry:
+            self.log(f"would poll: {idle_msg}")
+            return True
+        end = time.time() + timeout
+        while time.time() < end:
+            try:
+                if fn():
+                    self.log(ok_msg)
+                    return True
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(5)
+        self.abort(f"timed out waiting: {idle_msg}")
+
+    def ensure_device(self):
+        if self.dry:
+            self.log("would wait for device + RSA authorization")
+            return
+        self._run([self.adb, "wait-for-device"], timeout=180)
+        def authorized():
+            r = self._run([self.adb, "devices"], timeout=30)
+            return "\tdevice" in r.stdout
+        if authorized():
+            self.log("device authorized")
+            return
+        print("ON THE PHONE: enable Developer options (tap Build number 7x), "
+              "enable USB debugging, plug the cable, then tap Allow + "
+              "Always-allow on the RSA prompt.")
+        self.poll(authorized, 300, "RSA authorization", "device authorized")
+
+    def human(self, title, steps, verify=None):
+        print(f"\n===== YOUR TURN: {title} =====")
+        for i, s in enumerate(steps, 1):
+            print(f"  {i}. {s}")
+        if self.dry:
+            self.log(f"would wait for: {title}")
+            return True
+        while True:
+            input("[input] press Enter when done (or type ABORT): ")
+            if verify is None:
+                return True
+            try:
+                if verify():
+                    self.log(f"verified: {title}")
+                    return True
+            except Exception as e:  # noqa: BLE001
+                print(f"not yet: {e}")
+            ans = input("[input] retry, SKIP, or ABORT? ").strip().lower()
+            if ans == "abort":
+                self.abort("aborted by user (nothing flashed)")
+            if ans == "skip":
+                self.log(f"skipped by user: {title}")
+                return False
+
+    def open_app(self, pkg):
+        if self.dry:
+            self.log(f"would open app: {pkg}")
+            return
+        self.shell("monkey", "-p", pkg, "-c",
+                   "android.intent.category.LAUNCHER", "1")
+
+    def open_settings(self, action):
+        if self.dry:
+            self.log(f"would open Settings: {action}")
+            return
+        self.shell("am", "start", "-a", action)
+
+    def install_apk(self, path):
+        if self.dry:
+            self.log(f"would adb install: {path}")
+            return
+        r = self._run([self.adb, "install", str(path)], timeout=300)
+        print((r.stdout + r.stderr)[-400:])
+        if r.returncode != 0 and "ALREADY_EXISTS" not in (r.stdout + r.stderr):
+            self.abort(f"adb install failed for {path}")
+
+    def latest_download(self, pattern):
+        out = self.shell("ls", "-t", "/sdcard/Download")
+        import fnmatch as _fn
+        for line in out.splitlines():
+            name = line.strip().split()[-1]
+            if _fn.fnmatch(name.lower(), pattern.lower()):
+                return "/sdcard/Download/" + name
+        return ""
+
+    def battery_ok(self, minimum=30):
+        if self.dry:
+            self.log("would check battery")
+            return True
+        out = self.shell("dumpsys", "battery")
+        level = 100
+        for line in out.splitlines():
+            if "level:" in line:
+                try:
+                    level = int(line.split(":")[1])
+                except ValueError:
+                    pass
+        self.log(f"battery: {level}%")
+        if level < minimum:
+            self.confirm(f"battery {level}% under {minimum}%", expect="CHARGE_ANYWAY")
+        return True
+
+    def disk_ok(self, path, need_bytes):
+        import shutil as _sh
+        tgt = Path(path)
+        base = tgt.parent if tgt.suffix else tgt
+        free = _sh.disk_usage(base).free if not self.dry else need_bytes + 1
+        self.log("disk free MB: %d need MB: %d" % (free // (1 << 20), need_bytes // (1 << 20)))
+        if free < need_bytes:
+            self.abort("not enough local disk (free space first)")
+        return True
+
+    def pull(self, remote, local):
+        if self.dry:
+            self.log(f"would pull: {remote} -> {local}")
+            return local
+        Path(local).parent.mkdir(parents=True, exist_ok=True)
+        r = self._run([self.adb, "pull", remote, str(local)], timeout=600)
+        if r.returncode != 0:
+            self.abort(f"adb pull failed: {remote}")
+        return local
+
+    def photo(self, what):
+        self.human("photograph the phone screen (screenshots are broken "
+                   "on some builds)",
+                   [f"make the phone show: {what}",
+                    "take a clear photo with another camera",
+                    "confirm the exact on-screen text back to the operator"])
+
     def shell(self, *args, timeout=60):
         if self.dry:
             self.log(f"would run: adb shell {' '.join(args)}")
@@ -317,7 +462,7 @@ def main():
                     help="red-banner mode: untested profiles + custom tables")
     ap.add_argument("--patches",
                     help="user patch-table JSON (experimental custom flow)")
-    ap.add_argument("--phases", default="detect,flash,root,unlock",
+    ap.add_argument("--phases", default="setup,detect,flash,root,unlock",
                     help="subset/order, e.g. unlock or detect,verify")
     args = ap.parse_args()
     cfg = json.loads(Path(args.config).read_text()) if Path(args.config).exists() \
@@ -362,7 +507,13 @@ def main():
             ux.log(f"phase {phase}: already done (resume), skipping")
             continue
         ux.log(f"===== phase: {phase} =====")
-        if phase == "detect":
+        if phase == "setup":
+            ux.log("python %s" % sys.version.split()[0])
+            ux.log("adb=%s fastboot=%s" % (ux.adb, ux.fastboot))
+            ux.ensure_device()
+            ux.battery_ok()
+            ux.disk_ok(Path(args.work), 1 << 30)
+        elif phase == "detect":
             ux.device_health("detect")
         elif phase == "bootloader":
             if ux.dry:

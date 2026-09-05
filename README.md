@@ -16,7 +16,20 @@ python wizard.py --work work-wizard --phases verify  # health re-check anytime
 ```
 
 State resumes from `work-wizard/state.json`; `--phases unlock` (or any
-subset) runs just that slice. Every destructive step needs typed
+subset) runs just that slice. Every run starts with `setup`: environment
+sweep, device + RSA-authorization polling, battery and disk gates.
+
+## Hands-free vs hands-on (what the CLI does vs what you do)
+
+Automated: env checks, RSA wait loops, APK installs (from your configured
+copies), opening apps/screens for you, reboot waits, backups, builds,
+flashes, health checks, photo/receipt bookkeeping.
+
+You, when asked with exact steps: enable Developer options + USB debugging,
+tap Allow on the RSA prompt, in-app taps the tool cannot script (it opens
+the screen and verifies the result), cable tricks for fastboot, photos of
+screens (screenshots are broken on some builds), typed confirmations.
+Nothing advances on assumption: every handoff verifies before continuing. Every destructive step needs typed
 confirmation; `--dry-run` performs the whole ceremony against logs only.
 
 ## Architecture

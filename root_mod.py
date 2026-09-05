@@ -35,17 +35,35 @@ def run_root_phase(ux, profile, cfg):
     ux.confirm("bootloader unlocked + stock init_boot recorded?", expect="YES")
     pkgs = [root.get("manager_package", "")] + root.get("manager_package_alt", [])
     pkgs = [p for p in pkgs if p]
-    installed = ux.installed_packages()
-    if not any(p in installed for p in pkgs):
-        ux.log("ON DEVICE, install your KernelSU manager APK, then open it.")
-        ux.log("Full taps here: docs/root-image-walkthrough.md (§2-§3).")
-        ux.log("In the manager: patch the STOCK init_boot file (manager "
-               "recommends init_boot on this device). NEVER Magisk-in-boot "
-               "(bootloops here).")
-        ux.confirm("manager installed and init_boot patched on-device?",
-                   expect="YES")
-    ux.log("ON DEVICE: pull the manager-produced image to the PC "
-           "(adb pull) and set config firmware_files.init_boot_ksu to it.")
+    def manager_present():
+        return any(p in ux.installed_packages() for p in pkgs)
+    if not manager_present():
+        apk = (cfg.get("apks", {}) or {}).get("ksu_manager", "")
+        if apk and Path(apk).is_file():
+            ux.install_apk(apk)
+        if not manager_present():
+            ux.human("install the KernelSU manager",
+                     ["get the pinned APK (docs/root-image-walkthrough.md §1)",
+                      "accept the install prompt on the phone"],
+                     verify=manager_present)
+    ux.open_app(pkgs[0])
+    def patched_file():
+        f = ux.latest_download("*patched*.img")
+        if not f:
+            raise RuntimeError("no *patched*.img in Download yet "
+                               "(finish the manager patch first)")
+        return True
+    ux.human("patch init_boot on-device",
+             ["the manager just opened on the phone",
+              "Install -> Select and Patch a File -> stock init_boot "
+              "(taps: docs/root-image-walkthrough.md §3; NEVER Magisk)"],
+             verify=patched_file)
+    found = ux.latest_download("*patched*.img")
+    if found:
+        dst = str(Path("work") / "ksu_patched.img")
+        ux.pull(found, dst)
+        fw["init_boot_ksu"] = dst
+        ux.log("staged manager output -> " + dst + " (pinned in config)")
     ksu = fw.get("init_boot_ksu", "")
     if not ksu or not Path(ksu).is_file():
         ux.log("init_boot_ksu path not set yet; re-run when staged")

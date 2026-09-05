@@ -66,9 +66,12 @@ def run_flash_plan(ux, profile, cfg):
                 ux.abort(f"denied target: {t}")
         src = fw.get(step.get("source_key", ""))
         if not src or not Path(src).is_file():
-            ux.log(f"need image for {part} (config firmware_files."
-                   f"{step.get('source_key')}); skipping until provided")
-            return False
+            if ux.dry:
+                ux.log(f"need image for {part}; skipping until provided")
+                return False
+            src = ux.ask_path(f"image file for partition '{part}' "
+                              f"({step.get('note', '')})")
+            fw[step.get("source_key", "")] = src
         ok, got = check_magic(src, step.get("magic", ""))
         if not ok:
             ux.abort(f"{part}: magic {got} != expected {step.get('magic')} "
