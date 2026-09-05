@@ -56,6 +56,25 @@ class Refuse(Exception):
     """Gate refusal: printed plainly, exit code 2, nothing touched."""
 
 
+# Injectable prompts (GUI front-ends set these to dialog-backed functions;
+# CLI default is terminal input). Signatures: _ASK(prompt)->str,
+# _ASK_SECRET(prompt)->str (never logged).
+_ASK = None
+_ASK_SECRET = None
+
+
+def _ask(prompt):
+    if _ASK is not None:
+        return _ASK(prompt)
+    return input(prompt)
+
+
+def _ask_secret(prompt):
+    if _ASK_SECRET is not None:
+        return _ASK_SECRET(prompt)
+    return getpass.getpass(prompt)
+
+
 def red(text):
     return f"\033[91m{text}\033[0m"
 
@@ -287,7 +306,7 @@ def cmd_flash(args):
     print(f"preflight: unlocked, {out.strip().splitlines()[-1] if out.strip() else '?'}")
     print(f"ABOUT TO FLASH {SLOT} with {img.name} ({img.stat().st_size} bytes).")
     print("Slot B is never touched. Revert = unlock.py revert --backup DIR.")
-    ans = input("type YES in capitals to flash: ").strip()
+    ans = _ask("type YES in capitals to flash: ").strip()
     if ans != "YES":
         raise Refuse("aborted by user (nothing flashed)")
     rc, out = fastboot(["flash", SLOT, str(img)], timeout=300)
@@ -333,7 +352,7 @@ def cmd_revert(args):
     rc, out = fastboot(["devices"])
     if "fastboot" not in out:
         raise Refuse("device not in fastboot")
-    ans = input("type YES in capitals to revert: ").strip()
+    ans = _ask("type YES in capitals to revert: ").strip()
     if ans != "YES":
         raise Refuse("aborted by user (nothing flashed)")
     rc, out = fastboot(["flash", SLOT, str(img)], timeout=300)
@@ -349,7 +368,7 @@ def cmd_custom(args):
     if not args.experimental:
         raise Refuse("custom firmware flow requires --experimental "
                      "(untested device/table)")
-    ans = input("type EXPERIMENTAL in capitals to proceed: ").strip()
+    ans = _ask("type EXPERIMENTAL in capitals to proceed: ").strip()
     if ans != "EXPERIMENTAL":
         raise Refuse("aborted by user (nothing touched)")
     sp = Path(args.stock)
@@ -421,12 +440,12 @@ def cmd_bootloader(_args):
     print("Take that unlock data to the VENDOR portal, retrieve YOUR key, "
           "then continue. (Some devices instead need 'fastboot flashing "
           "unlock' + on-screen confirm — follow vendor docs.)")
-    ans = input("have YOUR vendor-issued key ready? type YES to enter it "
-                "(or anything else to stop): ").strip()
+    ans = _ask("have YOUR vendor-issued key ready? type YES to enter it "
+               "(or anything else to stop): ").strip()
     if ans != "YES":
         raise Refuse("stopped (nothing changed)")
-    key = getpass.getpass("paste unlock key (hidden, never stored/logged): "
-                          ).strip()
+    key = _ask_secret("paste unlock key (hidden, never stored/logged): "
+                      ).strip()
     try:
         if not key:
             raise Refuse("empty key (nothing sent)")

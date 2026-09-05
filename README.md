@@ -91,6 +91,20 @@ rotates the `-latest` zips per release, so there is no stable vendor
 checksum to pin against — HTTPS + structure + execution is the check,
 stated plainly.
 
+## GUI: plug-and-go window (`manager_gui.py`)
+
+```bash
+python manager_gui.py
+```
+
+Same backend, clickable: device picker with states, six phase tabs
+(Connect → Prep → Flash → Root → Unlock → Verify), command-echo log,
+package checklist with ordered per-item-confirm uninstall, firmware file
+pickers, typed-confirm dialogs wired into every destructive call, plus a
+SIMULATE toggle that streams the dry-run rehearsal into the log instead
+of touching hardware. UI conventions follow the classic ADB-manager
+pattern (threaded calls, no frozen window). Nothing runs on launch.
+
 ## Supported devices
 
 | Profile | Status | Notes |
