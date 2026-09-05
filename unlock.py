@@ -28,6 +28,7 @@ remain counter untouched, zero modem exceptions).
 from __future__ import annotations
 
 import argparse
+import getpass
 import hashlib
 import os
 import shutil
@@ -38,6 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import patches
+import imageaudit
 from patches import EXPECT_MODEL_SUBSTR, EXPECT_SKU, EXPECT_BASEBAND_SUBSTR
 from patches import EXPECT_SECURESTATE, EXPECT_STOCK_SIZE, EXPECT_STOCK_SHA256
 from patches import EXPECT_VERSION_OFF, EXPECT_VERSION, PATCHES
@@ -52,6 +54,43 @@ FORBIDDEN = ("md1img_b", "preloader", "lk", "gpt", "pgpt",
 
 class Refuse(Exception):
     """Gate refusal: printed plainly, exit code 2, nothing touched."""
+
+
+def red(text):
+    return f"\033[91m{text}\033[0m"
+
+
+def banner_experimental():
+    print(red("=" * 70))
+    print(red("EXPERIMENTAL MODE: untested device/flow. Bricks are YOUR risk."))
+    print(red("Full-parse audit + byte-exact discipline still enforced;"))
+    print(red("human judgment is not optional here."))
+    print(red("=" * 70))
+
+
+def load_table(path):
+    """User patch table JSON: [{label, offset ("0x.." or int), old (hex),
+    new (hex), why}]. Returns [(label, int, bytes, bytes, why)]."""
+    import json as _json
+    raw = _json.loads(Path(path).read_text())
+    out = []
+    for e in raw:
+        off = e["offset"]
+        off = int(off, 16) if isinstance(off, str) else int(off)
+        out.append((str(e.get("label", f"@{off:#x}")), off,
+                    bytes.fromhex(e["old"]), bytes.fromhex(e["new"]),
+                    str(e.get("why", ""))))
+    if not out:
+        raise Refuse("empty patch table")
+    return out
+
+
+def audit_or_refuse(path, what):
+    ok, rep = imageaudit.audit_image(path)
+    print(imageaudit.render(rep))
+    if not ok:
+        raise Refuse(f"{what} failed full-parse audit (see above)")
+    return rep
 
 
 def run(cmd, **kw):
@@ -175,6 +214,8 @@ def check_stock(path):
 
 def cmd_build(args):
     data = bytearray(check_stock(args.stock))
+    audit_or_refuse(args.stock, "stock image")
+    audit_or_refuse(args.stock, "stock image")
     applied = []
     for label, off, old_hx, new_hx, _why in PATCHES:
         old, new = bytes.fromhex(old_hx), bytes.fromhex(new_hx)
@@ -294,11 +335,111 @@ def cmd_revert(args):
     return 0
 
 
+def cmd_custom(args):
+    if not args.experimental:
+        raise Refuse("custom firmware flow requires --experimental "
+                     "(untested device/table)")
+    ans = input("type EXPERIMENTAL in capitals to proceed: ").strip()
+    if ans != "EXPERIMENTAL":
+        raise Refuse("aborted by user (nothing touched)")
+    sp = Path(args.stock)
+    if not sp.is_file():
+        raise Refuse(f"stock file not found: {sp}")
+    audit_or_refuse(sp, "stock image (intact-factory proof lives here: "
+                    "stored-vs-recomputed digests must match pre-patch)")
+    table = load_table(args.patches)
+    data = bytearray(sp.read_bytes())
+    for label, off, old, new, _why in table:
+        if off < 0 or off + len(old) > len(data) or len(old) != len(new):
+            raise Refuse(f"table entry {label}: bad range/size")
+        if bytes(data[off:off + len(old)]) != old:
+            raise Refuse(f"table entry {label}: expected {old.hex()} at "
+                         f"{off:#x}, found "
+                         f"{bytes(data[off:off+len(old)]).hex()} — refusing")
+        data[off:off + len(new)] = new
+    tmp = Path(args.out)
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_bytes(bytes(data))
+    ok, rep = imageaudit.compare_built(sp.read_bytes(), bytes(data),
+                                       [(l, o, ol, nw) for l, o, ol, nw, _w
+                                        in table])
+    if not ok:
+        raise Refuse(f"byte-exact discipline failed: {rep['unexplained']}")
+    print(f"diff audit: {len(rep['runs'])} runs, all declared. OK")
+    here = Path(__file__).resolve().parent
+    r = run([sys.executable, str(here / "sign_mtk_cert.py"), "-w",
+             str(tmp), "-o", str(tmp.with_suffix(".signed.img"))],
+            timeout=300)
+    tail = (r.stdout + r.stderr)[-800:]
+    if r.returncode != 0 or "Write complete" not in tail:
+        raise Refuse(f"re-sign failed:\n{tail}")
+    signed = tmp.with_suffix(".signed.img")
+    ok2, rep2 = imageaudit.audit_image(signed)
+    print(imageaudit.render(rep2))
+    if not ok2:
+        raise Refuse("signed output failed re-parse audit")
+    (tmp.parent / "MANIFEST-custom.txt").write_text(
+        f"mode=EXPERIMENTAL-custom stock={sp.name} "
+        f"out={signed.name} sha256={sha256(signed)} "
+        f"table={[t[0] for t in table]}\n"
+        f"key material: none used, none stored (user key never touches "
+        f"this flow)\n")
+    print(f"custom build complete: {signed}")
+    print("flash only via: unlock.py flash --image ... --backup ... "
+          "(same gates: backup present, unlocked BL, typed YES)")
+    return 0
+
+
+def cmd_bootloader(_args):
+    print("Bootloader unlock helper (official-style flow only).");
+    print("WARNING: unlocking typically FACTORY-RESETS userdata (vendor "
+          "behavior). Back up the phone first. This tool performs no "
+          "LK/bootloader patching of its own.")
+    adb("reboot", "bootloader")
+    time.sleep(12)
+    rc, out = fastboot(["devices"])
+    if "fastboot" not in out:
+        raise Refuse("device not in fastboot")
+    rc, out = fastboot(["getvar", "securestate"])
+    if EXPECT_SECURESTATE in out:
+        print("already unlocked; nothing to do")
+        return 0
+    print("If your vendor offers an official key flow (e.g. Motorola unlock "
+          "portal):")
+    rc, out = fastboot(["oem", "get_unlock_data"])
+    print(out[-600:])
+    print("Take that unlock data to the VENDOR portal, retrieve YOUR key, "
+          "then continue. (Some devices instead need 'fastboot flashing "
+          "unlock' + on-screen confirm — follow vendor docs.)")
+    ans = input("have YOUR vendor-issued key ready? type YES to enter it "
+                "(or anything else to stop): ").strip()
+    if ans != "YES":
+        raise Refuse("stopped (nothing changed)")
+    key = getpass.getpass("paste unlock key (hidden, never stored/logged): "
+                          ).strip()
+    try:
+        if not key:
+            raise Refuse("empty key (nothing sent)")
+        rc, out = fastboot(["oem", "unlock", key], timeout=180)
+        print(out[-400:])
+    finally:
+        key = "0" * 64
+        del key
+    rc, out = fastboot(["getvar", "securestate"])
+    if EXPECT_SECURESTATE in out or "unlocked" in out.lower():
+        print("bootloader reports unlocked")
+        return 0
+    raise Refuse("still locked (see output above); follow vendor guidance")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter,
                                  epilog=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    ap.add_argument("--experimental", action="store_true",
+                    help="enable EXPERIMENTAL flows (red banner; custom "
+                    "firmware tables; untested devices at your own risk)")
     sub.add_parser("status")
     p = sub.add_parser("backup")
     p.add_argument("--out", required=True)
@@ -311,10 +452,18 @@ def main():
     sub.add_parser("verify")
     p = sub.add_parser("revert")
     p.add_argument("--backup", required=True)
+    p = sub.add_parser("custom")
+    p.add_argument("--stock", required=True)
+    p.add_argument("--patches", required=True,
+                   help="your patch table JSON [{label,offset,old,new,why}]")
+    p.add_argument("--out", required=True)
+    sub.add_parser("bootloader")
     p = sub.add_parser("full")
     p.add_argument("--stock", required=True)
     p.add_argument("--work", required=True)
     args = ap.parse_args()
+    if args.experimental:
+        banner_experimental()
     try:
         if args.cmd == "status":
             return cmd_status(args)
@@ -328,6 +477,10 @@ def main():
             return cmd_verify(args)
         if args.cmd == "revert":
             return cmd_revert(args)
+        if args.cmd == "custom":
+            return cmd_custom(args)
+        if args.cmd == "bootloader":
+            return cmd_bootloader(args)
         if args.cmd == "full":
             work = Path(args.work)
             work.mkdir(parents=True, exist_ok=True)

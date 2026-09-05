@@ -35,6 +35,36 @@ confirmation; `--dry-run` performs the whole ceremony against logs only.
 - `sign_mtk_cert.py`, `parse_mtk_certs.py` — vendored re-sign helpers.
 - `config.json` — local paths + strictness (never committed with contents).
 
+## Your own key (bootloader phase)
+
+`python unlock.py bootloader` guides an official-style unlock: it shows
+get_unlock_data output, you fetch YOUR key from the vendor portal, and
+paste it at a hidden prompt. The key travels straight into the one
+fastboot command (never shell), is never printed, logged, or written
+anywhere, and is wiped from memory after. Plain truth: unlocking usually
+factory-resets the phone (vendor behavior) - back up first - and this tool
+performs no bootloader patching of its own.
+
+## Experimental mode (red banner, your risk)
+
+`--experimental` enables:
+
+- Untested profiles in the wizard: detection still runs, but flashing
+  proceeds only with YOUR patch table (--patches TABLE.json). The tool
+  ships zero offsets for hardware it has not proven.
+- Custom modem firmware: audit the factory image (stored vs recomputed
+digests must match = intact-image proof), apply your table with old-byte
+gates, then the byte-exact audit - every differing byte must sit inside
+a declared entry with exact old-to-new content, or the build is refused
+(tested: merged runs, wrong-old-byte, hostile-extra-byte).
+
+Byte-for-byte means: built equals stock everywhere EXCEPT the declared
+set - verified by diff, not by trust. imageaudit.py implements both gates
+with stdlib only; RSA checks run where the vendored verifier supports
+them, hash consistency is load-bearing either way.
+
+---
+
 ## Supported devices
 
 | Profile | Status | Notes |

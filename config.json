@@ -5,6 +5,7 @@
   "backup_root": "backups",
   "work_root": "work",
   "strict": true,
+  "experimental": false,
   "require_typed_confirm": true,
   "device_profile": "kansas",
   "firmware_files": {

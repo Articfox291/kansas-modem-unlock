@@ -163,6 +163,10 @@ class Ux:
                  f"EE={ee} baseband={bb[:44]}")
 
 
+RED_ON = "\033[91m"
+RED_OFF = "\033[0m"
+
+
 def load_profiles():
     profs = {}
     for p in sorted((HERE / "devices").glob("*.json")):
@@ -203,8 +207,14 @@ def detect(ux, profs, cfg):
     ux.abort("unsupported device (see devices/README.md to add one)")
 
 
-def need_verified(profile, ux):
+def need_verified(profile, ux, experimental=False):
     if profile.get("status") != "verified-live":
+        if experimental:
+            ux.log(RED_ON + "UNTESTED PROFILE: proceeding under EXPERIMENTAL "
+                   "rules (your offsets, full audit, your risk)" + RED_OFF)
+            ux.confirm("accept EXPERIMENTAL on an untested profile?",
+                       expect="EXPERIMENTAL")
+            return
         ux.abort(f"profile {profile['id']} is {profile.get('status')}: "
                  f"audit/status only, flashing refused")
 
@@ -252,6 +262,47 @@ def phase_unlock(ux, profile, cfg, workdir):
     return True
 
 
+def phase_unlock_custom(ux, profile, cfg, workdir, args):
+    """Experimental custom-table flow for untested profiles/devices.
+
+    No shipped offsets are used here at all: the human brings their own
+    RE-proven table (--patches), the tool contributes only machinery
+    (full audit, old-byte gates, byte-exact diff discipline, re-sign,
+    backup/flash/verify gates)."""
+    need_verified(profile, ux, experimental=True)
+    if ux.dry:
+        ux.log("dry-run: would backup -> custom build (your table) -> "
+               "flash slot A -> verify")
+        return True
+    if not args.experimental:
+        ux.abort("custom unlock flow requires --experimental")
+    if not args.patches:
+        ux.log("custom flow needs --patches TABLE.json (your offsets, "
+               "proven by your own hardware work like ours was)")
+        return False
+    import unlock as U
+    workdir = Path(workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    bdir = workdir / "backups"
+    ux.log("== modem backup (EXPERIMENTAL run) ==")
+    U.cmd_backup(argparse_Namespace(out=str(bdir)))
+    stock = (cfg.get("firmware_files", {}) or {}).get("md1img_stock", "")
+    if not stock:
+        ux.log("set config firmware_files.md1img_stock to the factory image")
+        return False
+    bfile = workdir / "custom_work.img"
+    ux.log("== custom build (audit + your table + diff discipline) ==")
+    U.cmd_custom(argparse_Namespace(stock=stock, patches=args.patches,
+                                    out=str(bfile), experimental=True))
+    signed = bfile.with_suffix(".signed.img")
+    ux.log("== modem flash (slot A only, EXPERIMENTAL) ==")
+    U.cmd_flash(argparse_Namespace(image=str(signed), backup=str(bdir)))
+    time.sleep(75)
+    ux.log("== modem verify ==")
+    U.cmd_verify(argparse_Namespace())
+    return True
+
+
 def argparse_Namespace(**kw):
     import argparse as _a
     return _a.Namespace(**kw)
@@ -262,6 +313,10 @@ def main():
     ap.add_argument("--config", default=str(HERE / "config.json"))
     ap.add_argument("--work", default="work-wizard")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--experimental", action="store_true",
+                    help="red-banner mode: untested profiles + custom tables")
+    ap.add_argument("--patches",
+                    help="user patch-table JSON (experimental custom flow)")
     ap.add_argument("--phases", default="detect,flash,root,unlock",
                     help="subset/order, e.g. unlock or detect,verify")
     args = ap.parse_args()
@@ -283,6 +338,12 @@ def main():
         os.environ["FASTBOOT_PATH"] = cfg["fastboot_path"]
     # unlock.py resolves its tool paths at import; set env first.
     sys.path.insert(0, str(HERE))
+    if args.experimental:
+        print(RED_ON + "=" * 70)
+        print(RED_ON + "EXPERIMENTAL MODE: untested devices/flows. "
+              "Bricks are YOUR risk." + RED_OFF)
+        print(RED_ON + "Full-parse audit + byte-exact discipline still "
+              "enforced." + RED_OFF)
     profs = load_profiles()
     if not profs:
         ux.abort("no device profiles found")
@@ -303,21 +364,32 @@ def main():
         ux.log(f"===== phase: {phase} =====")
         if phase == "detect":
             ux.device_health("detect")
+        elif phase == "bootloader":
+            if ux.dry:
+                ux.log("dry-run: would guide bootloader unlock (key prompt)")
+            else:
+                import unlock as _U
+                _U.cmd_bootloader(argparse_Namespace())
         elif phase == "flash":
-            need_verified(profile, ux)
+            need_verified(profile, ux, args.experimental)
             import flash_mod as _f  # noqa: F811
             if not _f.run_flash_plan(ux, profile, cfg):
                 ux.log("flash phase incomplete (provide missing images, re-run)")
                 save()
                 return 1
         elif phase == "root":
-            need_verified(profile, ux)
+            need_verified(profile, ux, args.experimental)
             if not root_mod.run_root_phase(ux, profile, cfg):
                 ux.log("root phase incomplete (finish on-device steps, re-run)")
                 save()
                 return 1
         elif phase == "unlock":
-            if not phase_unlock(ux, profile, cfg, Path(args.work)):
+            if profile.get("status") == "verified-live" and not args.patches:
+                ok = phase_unlock(ux, profile, cfg, Path(args.work))
+            else:
+                ok = phase_unlock_custom(ux, profile, cfg, Path(args.work),
+                                         args)
+            if not ok:
                 ux.log("unlock phase incomplete, re-run")
                 save()
                 return 1
