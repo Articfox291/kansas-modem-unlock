@@ -38,6 +38,7 @@ def run_root_phase(ux, profile, cfg):
     installed = ux.installed_packages()
     if not any(p in installed for p in pkgs):
         ux.log("ON DEVICE, install your KernelSU manager APK, then open it.")
+        ux.log("Full taps here: docs/root-image-walkthrough.md (§2-§3).")
         ux.log("In the manager: patch the STOCK init_boot file (manager "
                "recommends init_boot on this device). NEVER Magisk-in-boot "
                "(bootloops here).")
