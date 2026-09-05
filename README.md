@@ -78,6 +78,19 @@ them, hash consistency is load-bearing either way.
 
 ---
 
+## Production setup (no manual tool installs)
+
+`python bootstrap.py --yes` fetches official Google platform-tools
+(~15-50MB, HTTPS-only dl.google.com) into `vendor/` (git-ignored, never
+committed) and verifies them three ways: zip integrity, both binaries
+present, `adb version` / `fastboot --version` execute. The wizard offers
+the same download automatically on first run (`setup` phase) unless
+`tools.auto_download` is off. Strict setups pin an exact URL + sha256
+(`config tools.pinned` or `bootstrap.py --url/--sha256`); note Google
+rotates the `-latest` zips per release, so there is no stable vendor
+checksum to pin against — HTTPS + structure + execution is the check,
+stated plainly.
+
 ## Supported devices
 
 | Profile | Status | Notes |

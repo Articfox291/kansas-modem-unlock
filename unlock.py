@@ -101,12 +101,22 @@ def run(cmd, **kw):
         raise Refuse(f"missing tool: {cmd[0]} (install platform-tools, add to PATH)")
 
 
+def _vendor_bin(name):
+    exe = name + (".exe" if os.name == "nt" else "")
+    p = Path(__file__).resolve().parent / "vendor" / "platform-tools" / exe
+    return str(p) if p.is_file() else ""
+
+
 def need_tools():
     for label, t in (("adb", ADB), ("fastboot", FASTBOOT)):
         if shutil.which(t) is None and not Path(t).is_file():
+            vendored = _vendor_bin(label)
+            if vendored:
+                globals()[label.upper()] = vendored
+                continue
             raise Refuse(
-                f"missing tool: {label} (set {label.upper()}_PATH or add "
-                f"platform-tools to PATH)")
+                f"missing tool: {label} (run: python bootstrap.py --yes, "
+                f"or set {label.upper()}_PATH, or add platform-tools to PATH)")
 
 
 def adb(*args, timeout=60):

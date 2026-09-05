@@ -43,9 +43,16 @@ class Ux:
         if dry:
             self.adb, self.fastboot = "adb", "fastboot"
         else:
-            self.adb = self._resolve_tool("adb", os.environ.get("ADB_PATH"))
-            self.fastboot = self._resolve_tool(
-                "fastboot", os.environ.get("FASTBOOT_PATH"))
+            try:
+                self.adb = self._resolve_tool("adb",
+                                              os.environ.get("ADB_PATH"))
+                self.fastboot = self._resolve_tool(
+                    "fastboot", os.environ.get("FASTBOOT_PATH"))
+            except Refuse:
+                self.adb, self.fastboot = "", ""
+            if not self.adb or not self.fastboot:
+                self.log("tools unresolved yet "
+                         "(setup phase will offer the official download)")
 
     @staticmethod
     def _resolve_tool(name, configured):
@@ -53,17 +60,44 @@ class Ux:
         if configured and Path(configured).is_file():
             return configured
         if configured:
-            raise Refuse(f"{name}: configured path not found: {configured}")
+            raise Refuse(f"{name} not found: {configured}")
+        vendored = Path(__file__).resolve().parent / "vendor" / "platform-tools" / (name + (".exe" if os.name == "nt" else ""))
+        if vendored.is_file():
+            return str(vendored)
         found = _sh.which(name)
         if found:
             return found
         raise Refuse(
-            f"{name} not found. Install platform-tools and either add it "
-            f"to PATH or set {name.upper()}_PATH to the binary, e.g.:\n"
-            f"  set {name.upper()}_PATH=C:\\path\\to\\platform-tools"
-            f"\\{name}.exe")
-        if dry:
-            self.log("DRY RUN: no device writes will happen")
+            f"{name} not found. Run: python bootstrap.py --yes (official "
+            f"download, verified), or set {name.upper()}_PATH, or add "
+            f"platform-tools to PATH")
+
+    def ensure_tools(self):
+        if self.dry:
+            self.log("would ensure platform-tools (download if missing)")
+            return
+        if self.adb and self.fastboot:
+            self.log(f"tools: adb={self.adb} fastboot={self.fastboot}")
+            return
+        tools_cfg = self.cfg.get("tools", {}) \
+            if isinstance(self.cfg.get("tools"), dict) else {}
+        if not tools_cfg.get("auto_download", True):
+            self.abort("tools missing and tools.auto_download is off "
+                       "(install platform-tools, set ADB_PATH/FASTBOOT_PATH, "
+                       "or run bootstrap.py)")
+        self.human("download official platform-tools",
+                   ["~15-50MB from dl.google.com over HTTPS",
+                    "verified after download: zip structure + both binaries "
+                    "present + version output runs",
+                    "binaries land in vendor/ (git-ignored, never committed)",
+                    "strict setups: pin url+sha256, see README production section"])
+        import bootstrap
+        paths = bootstrap.ensure()
+        self.adb = self.adb or paths.get("adb", "")
+        self.fastboot = self.fastboot or paths.get("fastboot", "")
+        if not self.adb or not self.fastboot:
+            self.abort("bootstrap did not yield tools; install manually")
+        self.log(f"tools ready: adb={self.adb}")
 
     def log(self, msg):
         print(f"[wizard] {msg}")
@@ -537,6 +571,7 @@ def main():
         ux.log(f"===== phase: {phase} =====")
         if phase == "setup":
             ux.log("python %s" % sys.version.split()[0])
+            ux.ensure_tools()
             ux.log("adb=%s fastboot=%s" % (ux.adb, ux.fastboot))
             ux.ensure_device()
             ux.battery_ok()

@@ -5,6 +5,11 @@
   "backup_root": "backups",
   "work_root": "work",
   "strict": true,
+  "tools": {
+    "_comment": "platform-tools provisioning. auto_download fetches the official Google zip on first run.",
+    "auto_download": true,
+    "pinned": {}
+  },
   "experimental": false,
   "require_typed_confirm": true,
   "apks": {

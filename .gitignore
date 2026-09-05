@@ -1,7 +1,11 @@
 __pycache__/
 *.pyc
 *.img
+*.zip
 backups/
 work/
+work-custom/
+work-wizard/
 captures/
+vendor/
 .DS_Store
