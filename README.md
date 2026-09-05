@@ -78,6 +78,19 @@ them, hash consistency is load-bearing either way.
 
 ---
 
+## Fresh machine: CachyOS installer (`setup-cachyos.sh`)
+
+Reproduces this exact toolchain on CachyOS/Arch: pi trio pinned 0.85.1
+(server+client included — background subagents fail without them),
+pi-subagents 0.65.1 via the `~/.pi/agent/npm` project shape, android-tools
+(adb/fastboot, official repos, on PATH by install), node/npm, base-devel,
+git, and the python sim packages. Then run `pi auth` yourself — auth,
+sessions, and keys are never carried over, by design:
+
+```bash
+./setup-cachyos.sh [--yes] [--no-upgrade] [--with-opencode] [--with-java] [--no-python-deps]
+```
+
 ## Production setup (no manual tool installs)
 
 `python bootstrap.py --yes` fetches official Google platform-tools
