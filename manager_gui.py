@@ -21,8 +21,13 @@ import queue
 import subprocess
 import sys
 import threading
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, simpledialog
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox, filedialog, simpledialog
+except ImportError:  # e.g. Linux without python3-tk
+    raise SystemExit("tkinter missing: install it first "
+                     "(CachyOS/Arch: part of the python+tk packages; "
+                     "Debian/Ubuntu: sudo apt install python3-tk)")
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent

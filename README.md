@@ -118,6 +118,17 @@ SIMULATE toggle that streams the dry-run rehearsal into the log instead
 of touching hardware. UI conventions follow the classic ADB-manager
 pattern (threaded calls, no frozen window). Nothing runs on launch.
 
+## Self-containment (what it brings vs what you bring)
+
+Brings: every script, the patch tables, the re-signer, the audit gates,
+the GUI, the docs. Zero pip/npm dependencies (stdlib + tkinter only);
+platform-tools self-bootstrap on first run (then works offline).
+
+You bring: Python 3.10+, your firmware images, your APKs, an unlocked
+bootloader, root, one device, cable, charge. Firmware/APKs are never
+bundled (copyright, size, device-specificity) and never fetched — the
+tool verifies what you point it at and refuses the rest.
+
 ## Supported devices
 
 | Profile | Status | Notes |
