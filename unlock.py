@@ -89,9 +89,13 @@ def banner_experimental():
 
 def load_table(path):
     """User patch table JSON: [{label, offset ("0x.." or int), old (hex),
-    new (hex), why}]. Returns [(label, int, bytes, bytes, why)]."""
+    new (hex), why}]. Also accepts {"patches": [...]} with extra metadata
+    keys (device, status, stock_md1img) carried alongside but unused here.
+    Returns [(label, int, bytes, bytes, why)]."""
     import json as _json
     raw = _json.loads(Path(path).read_text())
+    if isinstance(raw, dict):
+        raw = raw.get("patches", [])
     out = []
     for e in raw:
         off = e["offset"]
@@ -213,11 +217,23 @@ def cmd_backup(args):
     dst = out / f"md1img_a_backup_{ts}.img"
     print(f"pulling live {SLOT} (200MB, minutes) -> {dst}")
     r = run([ADB, "pull", f"/dev/block/by-name/{SLOT}", str(dst)], timeout=900)
+    method = "adb-pull"
     if r.returncode != 0:
-        raise Refuse(f"adb pull failed: {r.stderr[-500:]}")
+        # Stock adbd cannot read block devices on most builds; same bytes
+        # via the (already verified) root shell. Read-only either way.
+        print("direct pull refused; retrying via su dd (read-only) ...")
+        with open(dst, "wb") as f:
+            r2 = subprocess.run(
+                [ADB, "exec-out", "su", "-c",
+                 f"dd if=/dev/block/by-name/{SLOT} bs=4M 2>/dev/null"],
+                stdout=f, timeout=1800)
+        if r2.returncode != 0 or not dst.is_file() or dst.stat().st_size == 0:
+            raise Refuse(f"backup pull failed (pull: {r.stderr[-300:]}; "
+                         f"dd rc={r2.returncode})")
+        method = "su-dd"
     h = sha256(dst)
     (out / "BACKUP_MANIFEST.txt").write_text(
-        f"slot={SLOT} file={dst.name} sha256={h} utc={ts}\n"
+        f"slot={SLOT} file={dst.name} sha256={h} utc={ts} method={method}\n"
         f"DO NOT LOSE THIS FILE: it is the revert path.\n")
     print(f"backup sha256: {h}")
     return 0

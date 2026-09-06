@@ -1,0 +1,27 @@
+{
+  "_comment": "Nevada lab config (moto g play 2026 XT2615V). Non-interactive: used by postroot.py, which never prompts. Flash still needs --flash.",
+  "adb_path": "",
+  "fastboot_path": "",
+  "backup_root": "work-nevada/backups",
+  "work_root": "work-nevada",
+  "strict": true,
+  "tools": {
+    "auto_download": false,
+    "pinned": {}
+  },
+  "experimental": true,
+  "require_typed_confirm": true,
+  "apks": {
+    "ksu_manager": ""
+  },
+  "device_profile": "nevada",
+  "firmware_files": {
+    "_comment": "User-supplied RETUS factory images for nevada. Provenance is the owner's responsibility; hashes are pinned in devices/nevada.json.",
+    "system_gsi": "",
+    "vbmeta_a": "",
+    "vbmeta_b": "",
+    "init_boot_stock": "/home/cameron/Downloads/RETUS/init_boot.img",
+    "init_boot_ksu": "",
+    "md1img_stock": "/home/cameron/Downloads/RETUS/md1img.img"
+  }
+}
