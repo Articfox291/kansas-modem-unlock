@@ -1,0 +1,67 @@
+{
+  "_comment": "NEVADA experimental table 8/8 (moto g play 2026 XT2615V, MT6835N V18.6.6.P133): entries CATI-anchored + decode round-tripped + entry-force emu differentials PASS; gauntlet decode-matched 6/6 to kansas semantics. smu execution differential blocked on documented SWM engine gap. STILL EXPERIMENTAL: live foreign-SIM proof + remain/EE + revert required before any flash (devices/README.md checklist).",
+  "device": "nevada XT2615V MT6835N_NR17.RC.MP.V18.6.6.P133.02.337R",
+  "stock_md1img": {
+    "size": 76617232,
+    "sha256": "3383f93c2d1be9d36b3e291a67415c6c13345fe06843e8a95720e017021d3ba5"
+  },
+  "status": "EXPERIMENTAL-8-of-8-unproven-on-hardware",
+  "patches": [
+    {
+      "label": "force-legal",
+      "offset": "0x728c68",
+      "old": "141e4412",
+      "new": "01d2e0db",
+      "why": "custom_check_link_sml_legal_sim_rule entry returns LEGAL(1). CATI VA 0x90728a68; emu: stock 24-step a0=0, patch 1-step a0=1."
+    },
+    {
+      "label": "sl-check-force",
+      "offset": "0x739aee",
+      "old": "491e0821",
+      "new": "01d2e0db",
+      "why": "sml_sl_Check entry returns pass(1). CATI VA 0x907398ee; emu: stock a0=0, patch 1-step a0=1."
+    },
+    {
+      "label": "gate-e6e2",
+      "offset": "0x1a17c58",
+      "old": "70ca5b0f",
+      "new": "08900890",
+      "why": "BNEIC s3,1 per-cat verdict -> fall through (decode-verified)."
+    },
+    {
+      "label": "gate-e6ba",
+      "offset": "0x1a17c30",
+      "old": "90c89c08",
+      "new": "08900890",
+      "why": "BNEIC a0,1 early gate -> fall through (decode-verified)."
+    },
+    {
+      "label": "gate-e6e8",
+      "offset": "0x1a17c5e",
+      "old": "f0c87009",
+      "new": "08900890",
+      "why": "BNEIC a3,1 status-byte gate -> fall through (decode-verified)."
+    },
+    {
+      "label": "gate-e6f0",
+      "offset": "0x1a17c66",
+      "old": "90c87008",
+      "new": "08900890",
+      "why": "BNEIC a0,1 cat-choice gate -> fall through (decode-verified)."
+    },
+    {
+      "label": "gate-e6f4",
+      "offset": "0x1a17c6a",
+      "old": "a0ca6c38",
+      "new": "08900890",
+      "why": "BEQIC s5,7 cat-accounting gate -> fall through (decode-verified)."
+    },
+    {
+      "label": "gate-e6f8",
+      "offset": "0x1a17c6e",
+      "old": "608ae000",
+      "new": "08900890",
+      "why": "BEQC zero,s3 verdict-zero gate -> fall through (decode-verified)."
+    }
+  ]
+}

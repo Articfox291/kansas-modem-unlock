@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "id": "nevada",
+  "label": "Moto G Play (2026) XT2615V — MT6835N, build W1WNS36.18-114-1",
+  "status": "untested-draft",
+  "models": ["moto g play - 2026", "nevada"],
+  "skus": ["XT2615V"],
+  "baseband_substr": "MT6835N_NR17.RC.MP.V18.6.6.P133.02.337R",
+  "baseband_alt": [],
+  "securestate": "flashing_unlocked",
+  "stock_md1img": {"size": 76617232,
+    "sha256": "3383f93c2d1be9d36b3e291a67415c6c13345fe06843e8a95720e017021d3ba5"},
+
+  "never_flash": ["preloader", "gpt", "pgpt", "lk", "efuse", "efuseBackup",
+    "seccfg", "nvram", "nvdata", "protect1", "protect2", "md1img_b"],
+
+  "flash_plan": [],
+
+  "root": {
+    "method": "magisk-present-observed",
+    "manager_package": "com.topjohnwu.magisk",
+    "manager_package_alt": ["me.weishu.kernelsu"],
+    "stock_partition": "init_boot",
+    "su_probe": "su -c id",
+    "su_ok_marker": "uid=0",
+    "notes": [
+      "Lab unit shows Magisk 30.7 daemon + su binary responding; adb shell needs the one-time Superuser grant tap, then postroot.py runs hands-free.",
+      "Magisk in boot/init_boot is a proven bootloop on kansas; nevada behavior is unproven — treat root stack changes as experimental.",
+      "No flash_plan is defined for nevada: GSI/vbmeta work is out of scope until the modem flow is proven."
+    ]
+  },
+
+  "modem_unlock": {
+    "_comment": "NO patch bytes live in this profile (per devices/README.md: no untested offsets). The 6-of-8 DRAFT relocation lives in nevada_table.DRAFT.json for the experimental custom flow only; force-legal + sl-check-force still need Ghidra+MTK-loader RE.",
+    "slot": "md1img_a",
+    "patches": []
+  },
+
+  "verify": {
+    "remain_must_stay": "5",
+    "ee_must_stay": "0",
+    "sim_state_unlocked": "LOADED",
+    "sim_state_locked": "NETWORK_LOCKED"
+  }
+}
