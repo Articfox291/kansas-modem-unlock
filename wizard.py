@@ -109,7 +109,13 @@ class Ux:
         if self.dry:
             self.log(f"would confirm: {prompt} (expect {expect})")
             return
-        ans = input(f"[confirm] {prompt} [type {expect}]: ").strip()
+        if getattr(self, "auto_yes", False):
+            self.log(f"auto-yes: proceeding past: {prompt}")
+            return
+        try:
+            ans = input(f"[confirm] {prompt} [type {expect}]: ").strip()
+        except EOFError:
+            self.abort("no terminal input available (run interactively)")
         if ans != expect:
             self.abort("aborted by user (nothing flashed)")
 
