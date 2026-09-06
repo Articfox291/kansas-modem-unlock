@@ -244,7 +244,11 @@ class Ux:
     def disk_ok(self, path, need_bytes):
         import shutil as _sh
         tgt = Path(path)
-        base = tgt.parent if tgt.suffix else tgt
+        base = tgt if not tgt.suffix else tgt.parent
+        while not base.exists():  # fresh checkout: leaf not created yet
+            if base.parent == base:
+                break
+            base = base.parent
         free = _sh.disk_usage(base).free if not self.dry else need_bytes + 1
         self.log("disk free MB: %d need MB: %d" % (free // (1 << 20), need_bytes // (1 << 20)))
         if free < need_bytes:
@@ -586,6 +590,8 @@ def main():
         ux.log(f"===== phase: {phase} =====")
         if phase == "setup":
             ux.log("python %s" % sys.version.split()[0])
+            if not args.dry_run:
+                Path(args.work).mkdir(parents=True, exist_ok=True)
             ux.ensure_tools()
             ux.log("adb=%s fastboot=%s" % (ux.adb, ux.fastboot))
             ux.ensure_device()
