@@ -5,6 +5,7 @@ __pycache__/
 backups/
 work/
 work-custom/
+work-setup/
 work-wizard/
 captures/
 vendor/
